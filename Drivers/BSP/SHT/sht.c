@@ -4,8 +4,6 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
-
-
 gpioPinInfo_s g_clkInfo = {SHT_CLK_PORT, SHT_CLK_PIN};
 gpioPinInfo_s g_sdaInfo = {SHT_SDA_PORT, SHT_SDA_PIN};
 
