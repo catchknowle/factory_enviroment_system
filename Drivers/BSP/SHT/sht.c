@@ -1,3 +1,11 @@
+/**
+ * @file sht.c
+ * @brief SHT传感器驱动
+ * @author lulu
+ * @date 2026.6.14
+ * @version 1.0 初始版本
+ */
+
 #include "sht.h"
 #include "iic.h"
 #include <stdio.h>
@@ -92,8 +100,9 @@ static bool ReadTempHumid(gpioPinInfo_s clkPin, gpioPinInfo_s sdaPin, uint8_t *p
         return false;
     }
     
-    // stretch 使能，所以必须在ACK完成后释放SCL
-    SetSclPin(clkPin, GPIO_PIN_SET);
+    // stretch 使能，等待测量完成
+    // 注意：必须要将scl置为低电平，这样sda总线上的值才能变化
+    SetSclPin(clkPin, GPIO_PIN_RESET);
     IicDelayUs(4000);
 
     for(int i = 0; i < RECEIVE_INDEX_NUM; i++)
