@@ -50,7 +50,7 @@ void DataCollectTask(void)
 			temperature = CalculateTemperature(tempRaw);
 			humidity = CalculateHumidity(humidRaw);
 			// 通过串口打印温湿度数据
-			printf("温度: %.2f °C, 湿度: %.2f %%RH\r\n", temperature, humidity);
+			// printf("温度: %.2f °C, 湿度: %.2f %%RH\r\n", temperature, humidity);
 		}
 		times++;
 		if (times % 30 == 0)

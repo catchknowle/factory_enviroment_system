@@ -82,6 +82,8 @@ static bool ReadTempHumid(gpioPinInfo_s clkPin, gpioPinInfo_s sdaPin, uint8_t *p
         return readSuccess;
     }
 
+    IicStart(g_clkInfo, g_sdaInfo);
+
     // 发送读设备指令
     SendByte(clkPin, sdaPin, SHT_ADDR_READ);
     // 检查应答信号
@@ -89,9 +91,11 @@ static bool ReadTempHumid(gpioPinInfo_s clkPin, gpioPinInfo_s sdaPin, uint8_t *p
     {
         return false;
     }
-    // 使ACK完成后拉低SCL，ReceiveByte能从正确的SCL低电平开始
-    SetSclPin(clkPin, GPIO_PIN_RESET);
+    
+    // stretch 使能，所以必须在ACK完成后释放SCL
+    SetSclPin(clkPin, GPIO_PIN_SET);
     IicDelayUs(4000);
+
     for(int i = 0; i < RECEIVE_INDEX_NUM; i++)
     {
         pReceiveData[i] = ReceiveByte(clkPin, sdaPin);
@@ -124,6 +128,8 @@ static bool ReadTempHumid(gpioPinInfo_s clkPin, gpioPinInfo_s sdaPin, uint8_t *p
 static bool SendTransmitCommand(gpioPinInfo_s clkPin, gpioPinInfo_s sdaPin)
 {
     bool isAck = false;
+    // 发送起始信号
+    IicStart(g_clkInfo, g_sdaInfo);
     // 发送向器件写指令
     SendByte(clkPin, sdaPin, SHT_ADDR_WRITE);
     // 检查应答信号
@@ -138,6 +144,8 @@ static bool SendTransmitCommand(gpioPinInfo_s clkPin, gpioPinInfo_s sdaPin)
             isAck = CheckAckSignal(clkPin, sdaPin);
             if(true == isAck)
             {
+                // 发送停止信号，结束命令阶段
+                IicStop(g_clkInfo, g_sdaInfo);
                 return true;
             }
         }
@@ -163,21 +171,14 @@ bool GetTempHumidProcess(uint16_t *pTempRaw, uint16_t *pHumidRaw)
     bool returnResult = false;
     uint8_t receiveData[RECEIVE_INDEX_NUM] = {0};
 
-    // 发送起始信号
-    IicStart(g_clkInfo, g_sdaInfo);
     // 发送命令字
     returnResult = SendTransmitCommand(g_clkInfo, g_sdaInfo);
     if(returnResult == true)
     {
-        // 拉低SCL完成ACK周期，使从机释放SDA
-        // SetSclPin(g_clkInfo, GPIO_PIN_RESET);
-        // IicDelayUs(2);
-        // 发送停止信号，结束命令阶段
-        IicStop(g_clkInfo, g_sdaInfo);
         // 等待测量完成（中重复度最大 6ms）
+        SetSclPin(g_clkInfo, GPIO_PIN_SET);
         IicDelayUs(6000);
         // 发送起始信号，开始读取数据
-        IicStart(g_clkInfo, g_sdaInfo);
         returnResult = ReadTempHumid(g_clkInfo, g_sdaInfo, receiveData);
         if(true == returnResult)
         {
