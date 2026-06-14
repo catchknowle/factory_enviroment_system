@@ -1,0 +1,17 @@
+{
+    "files.associations": {
+        "stm32f1xx_it.h": "c",
+        "sys.h": "c",
+        "usart.h": "c",
+        "delay.h": "c",
+        "led.h": "c",
+        "stm32f1xx.h": "c",
+        "stm32f103xe.h": "c",
+        "system_stm32f1xx.h": "c",
+        "core_cm3.h": "c",
+        "cmsis_compiler.h": "c"
+    },
+    "search.exclude": {
+        "Output/**": true
+    }
+}
