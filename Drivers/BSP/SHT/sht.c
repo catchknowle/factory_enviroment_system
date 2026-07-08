@@ -11,9 +11,30 @@
 #include <stdio.h>
 #include "FreeRTOS.h"
 #include "task.h"
+#include "queue.h"
+#include "QueueManage.h"
+#include "./BSP/LED/led.h"
+#include <stdbool.h>
 
 gpioPinInfo_s g_clkInfo = {SHT_CLK_PORT, SHT_CLK_PIN};
 gpioPinInfo_s g_sdaInfo = {SHT_SDA_PORT, SHT_SDA_PIN};
+
+static void ShtDelayMs(uint32_t delayMs)
+{
+    if (delayMs == 0)
+    {
+        return;
+    }
+
+    if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
+    {
+        vTaskDelay(pdMS_TO_TICKS(delayMs));
+        return;
+    }
+
+    IicDelayUs(delayMs * 1000U);
+}
+
 
 // 初始化SHT传感器
 void ShtInit(void)
@@ -97,13 +118,14 @@ static bool ReadTempHumid(gpioPinInfo_s clkPin, gpioPinInfo_s sdaPin, uint8_t *p
     // 检查应答信号
     if(false == CheckAckSignal(clkPin, sdaPin))
     {
+        IicStop(clkPin, sdaPin);
         return false;
     }
     
     // stretch 使能，等待测量完成
     // 注意：必须要将scl置为低电平，这样sda总线上的值才能变化
     SetSclPin(clkPin, GPIO_PIN_RESET);
-    IicDelayUs(4000);
+    ShtDelayMs(4);
 
     for(int i = 0; i < RECEIVE_INDEX_NUM; i++)
     {
@@ -186,7 +208,7 @@ bool GetTempHumidProcess(uint16_t *pTempRaw, uint16_t *pHumidRaw)
     {
         // 等待测量完成（中重复度最大 6ms）
         SetSclPin(g_clkInfo, GPIO_PIN_SET);
-        IicDelayUs(6000);
+        ShtDelayMs(6);
         // 发送起始信号，开始读取数据
         returnResult = ReadTempHumid(g_clkInfo, g_sdaInfo, receiveData);
         if(true == returnResult)
@@ -241,4 +263,79 @@ float CalculateTemperature(uint16_t tempRaw)
 float CalculateHumidity(uint16_t humidRaw)
 {
     return 100.0f * ((float)humidRaw / 65535.0f);
+}
+
+
+void DataCollectTask(void)
+{
+	uint16_t times = 0;
+	uint16_t tempRaw = 0;
+	uint16_t humidRaw = 0;
+    TempHumidStruct tempHumidSend = {0};
+    float tempSum = 0.0f;
+    float humidSum = 0.0f;
+    uint16_t validSampleCnt = 0;
+    queueType DataCollectToSend = {0};
+
+
+
+	#if TEST_STACK_WATERMARK
+		uint8_t residualStackSize = uxTaskGetStackHighWaterMark(DataCollectTask_Handler);
+		printf("DataCollectTask 剩余栈空间: %d\r\n", residualStackSize);
+	#endif
+	
+
+	while (1)
+	{
+        static uint8_t waitSendCnt = 0;                     // 等待发送计数器,每隔1s发送一次
+        float temp = 0.0f;                                  // 单次温度值
+        float humid = 0.0f;                                 // 单次湿度值
+        
+		if(true == GetTempHumidProcess(&tempRaw, &humidRaw))
+		{
+			// 计算单次温度和湿度值
+            temp = CalculateTemperature(tempRaw);
+            humid = CalculateHumidity(humidRaw);
+            // 通过串口打印温湿度数据
+			printf("index: %d, Temp: %.2f, Humidity: %.2f %%RH\r\n", waitSendCnt + 1, temp, humid);
+            // 累加单次温度和湿度值
+			tempSum += temp;
+			humidSum += humid;
+            validSampleCnt++;
+		}
+        
+        waitSendCnt++;
+        if(waitSendCnt >= 100)
+        {
+            if (validSampleCnt > 0)
+            {
+                tempHumidSend.temperature = tempSum / (float)validSampleCnt;
+                tempHumidSend.humidity = humidSum / (float)validSampleCnt;
+
+                DataCollectToSend.messageFrom = DATA_COLLECT_TASK;
+                DataCollectToSend.messageTo = COMMUNICATION_TASK;
+                DataCollectToSend.messageType = TEMP_HUMIDITY_COLLECT_FINISH;
+                if (true == QueuePayloadSet(&DataCollectToSend, &tempHumidSend, sizeof(tempHumidSend)))
+                {
+                    QueueSendUser(&DataCollectToSend);
+                }
+
+                // 清空累加值
+                tempSum = 0.0f;
+                humidSum = 0.0f;
+                // 清空有效样本计数器
+                validSampleCnt = 0;
+            }
+
+            waitSendCnt = 0;
+        }
+
+		times++;
+		if (times % 30 == 0)
+		{
+			LED0_TOGGLE();
+			times = 0;
+		}
+		vTaskDelay(10);
+	}
 }

@@ -26,52 +26,7 @@
 #include "./BSP/lora/lora.h"
 #include "main.h"
 #include "./BSP/SHT/sht.h"
-
-#define LORA_UNIT_TEST 1
-
-char cmd[20] = "AT+B9600";
-uint8_t cmd_flag = 0;
-extern UART_HandleTypeDef g_uart3_handle;
-extern uint8_t g_lora_rx_buffer[RXBUFFERSIZE];
-
-void DataCollectTask(void)
-{
-	uint16_t times = 0;
-	uint16_t tempRaw = 0;
-	uint16_t humidRaw = 0;
-	float temperature = 0.0f;
-	float humidity = 0.0f;
-
-	while (1)
-	{
-		if(true == GetTempHumidProcess(&tempRaw, &humidRaw))
-		{
-			// 计算温度和湿度值
-			temperature = CalculateTemperature(tempRaw);
-			humidity = CalculateHumidity(humidRaw);
-			// 通过串口打印温湿度数据
-			// printf("温度: %.2f °C, 湿度: %.2f %%RH\r\n", temperature, humidity);
-		}
-		times++;
-		if (times % 30 == 0)
-		{
-			LED0_TOGGLE();
-			times = 0;
-		}
-		vTaskDelay(10);
-	}
-}
-
-void CommunicationTask(void)
-{
-	while (1)
-	{
-#if LORA_UNIT_TEST
-		LoraUnitTest(LORA_REMOTE_COMMUNICATION_TEST);
-#endif
-		vTaskDelay(10);
-	}
-}
+#include "QueueManage.h"
 
 void StartTask(void)
 {
@@ -81,6 +36,8 @@ void StartTask(void)
 				NULL, DATA_COLLECT_TASK_PRIO, &DataCollectTask_Handler);
 	xTaskCreate((TaskFunction_t)CommunicationTask, "CommunicationTask", COMMUBICATION_TASK_STACK_SIZE,
 				NULL, COMMUBICATION_TASK_PRIO, &CommunicationTask_Handler);
+
+    QueueInit();
 	// 删除开始任务
 	vTaskDelete(StartTask_Handler);
 	// 退出临界区

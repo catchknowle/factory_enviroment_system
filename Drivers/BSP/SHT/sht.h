@@ -27,8 +27,17 @@ typedef enum
     HUMID_HIGH_BYTE_INDEX  = 3,                           // 湿度高字节索引位置
     HUMID_LOW_BYTE_INDEX   = 4,                           // 湿度低字节索引位置
     HUMID_CHECKSUM_INDEX   = 5,                           // 湿度校验和索引位置
-    RECEIVE_INDEX_NUM      = 6,      // 接收数据索引数量
+    RECEIVE_INDEX_NUM      = 6,                           // 接收数据索引数量
 }shtReceiveDataIndexEnum;
+
+//  温湿度数据结构体定义
+typedef struct 
+{
+    float temperature;                               // 温度
+    float humidity;                                  // 湿度
+}TempHumidStruct;
+
+
 
 // 初始化SHT传感器
 void ShtInit(void);
@@ -38,5 +47,7 @@ bool GetTempHumidProcess(uint16_t *pTempRaw, uint16_t *pHumidRaw);
 float CalculateTemperature(uint16_t tempRaw);
 // 根据原始数据计算湿度值（单位：%RH）
 float CalculateHumidity(uint16_t humidRaw);
+// 数据收集任务
+void DataCollectTask(void);
 
 #endif

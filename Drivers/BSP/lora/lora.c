@@ -4,9 +4,18 @@
 #include "./SYSTEM/delay/delay.h"
 #include "FreeRTOS.h"
 #include "task.h"
+#include "queue.h"
+#include "QueueManage.h"
+#include "sht.h"
+
+#define LORA_UNIT_TEST 1
+
+char cmd[20] = "AT+B9600";
 
 extern UART_HandleTypeDef g_uart1_handle; /* UART句柄 */
 extern UART_HandleTypeDef g_uart3_handle;
+
+static queueType receiveData = {0};
 
 /**
  * @brief 初始化LoRa模块
@@ -76,23 +85,23 @@ static void ExitATMode(void)
  *
  * @return 无返回值
  */
-static void SendATCommand(const char *pCmdType, uint8_t cmdTypeLen, uint32_t cmdValue, uint8_t cmdValueLen)
-{
-    char cmd[USART_SEND_LEN] = {0};
+// static void SendATCommand(const char *pCmdType, uint8_t cmdTypeLen, uint32_t cmdValue, uint8_t cmdValueLen)
+// {
+//     char cmd[USART_SEND_LEN] = {0};
 
-    // 将命令类型复制到命令缓冲区
-    memcpy(cmd, pCmdType, cmdTypeLen);
+//     // 将命令类型复制到命令缓冲区
+//     memcpy(cmd, pCmdType, cmdTypeLen);
 
-    // 在命令类型后追加命令值和结束符，格式化为AT命令格式
-    snprintf(cmd + cmdTypeLen, cmdValueLen + 1, "%d\r\n", cmdValue); // 1代表\0，添加\r\n结束符
-    // 打印构建好的命令字符串用于调试
-    // printf("cmd: %s", cmd);
+//     // 在命令类型后追加命令值和结束符，格式化为AT命令格式
+//     snprintf(cmd + cmdTypeLen, cmdValueLen + 1, "%d\r\n", cmdValue); // 1代表\0，添加\r\n结束符
+//     // 打印构建好的命令字符串用于调试
+//     // printf("cmd: %s", cmd);
 
-    HAL_UART_Transmit(&g_uart3_handle, (uint8_t *)cmd, strlen(cmd), 1000);
-    while (__HAL_UART_GET_FLAG(&g_uart3_handle, USART_FLAG_TC) == RESET)
-        ;
-    HAL_UART_Receive_IT(&g_uart3_handle, &g_uart3_rx_byte, 1);
-}
+//     HAL_UART_Transmit(&g_uart3_handle, (uint8_t *)cmd, strlen(cmd), 1000);
+//     while (__HAL_UART_GET_FLAG(&g_uart3_handle, USART_FLAG_TC) == RESET)
+//         ;
+//     HAL_UART_Receive_IT(&g_uart3_handle, &g_uart3_rx_byte, 1);
+// }
 
 /**
  * @brief 设置LoRa模块的通信参数，包括波特率、信道和传输速度。
@@ -107,91 +116,91 @@ static void SendATCommand(const char *pCmdType, uint8_t cmdTypeLen, uint32_t cmd
  *
  * @return 返回错误码，NO_ERROR表示无错误，其他值表示对应错误类型（如BAUD_ERROR等）
  */
-e_lora_error lora_set_param(uint32_t baudrate_in, uint8_t channel_in, uint8_t speed_in)
-{
-    e_lora_error res = NO_ERROR;
-    uint8_t baudrate_len = 0;
-    uint8_t channel_len = 0;
-    uint8_t speed_len = 1;
-    const uint32_t supported_baudrates[] = {
-        1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200};
-    const uint8_t BAUDRATE_COUNT = sizeof(supported_baudrates) / sizeof(supported_baudrates[0]);
+// static e_lora_error lora_set_param(uint32_t baudrate_in, uint8_t channel_in, uint8_t speed_in)
+// {
+//     e_lora_error res = NO_ERROR;
+//     uint8_t baudrate_len = 0;
+//     uint8_t channel_len = 0;
+//     uint8_t speed_len = 1;
+//     const uint32_t supported_baudrates[] = {
+//         1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200};
+//     const uint8_t BAUDRATE_COUNT = sizeof(supported_baudrates) / sizeof(supported_baudrates[0]);
 
-    // 验证波特率是否在支持列表中
-    int valid_baud = 0;
-    for (int i = 0; i < BAUDRATE_COUNT; ++i)
-    {
-        if (supported_baudrates[i] == baudrate_in)
-        {
-            valid_baud = 1;
-            break;
-        }
-    }
+//     // 验证波特率是否在支持列表中
+//     int valid_baud = 0;
+//     for (int i = 0; i < BAUDRATE_COUNT; ++i)
+//     {
+//         if (supported_baudrates[i] == baudrate_in)
+//         {
+//             valid_baud = 1;
+//             break;
+//         }
+//     }
 
-    if (!valid_baud)
-    {
-        res |= BAUD_ERROR;
-    }
-    else
-    {
-        // 根据波特率确定其数值所占字符长度，用于后续AT命令构造
-        if (baudrate_in < 19200)
-        {
-            baudrate_len = 4;
-        }
-        else if (baudrate_in < 115200)
-        {
-            baudrate_len = 5;
-        }
-        else
-        {
-            baudrate_len = 6;
-        }
-    }
+//     if (!valid_baud)
+//     {
+//         res |= BAUD_ERROR;
+//     }
+//     else
+//     {
+//         // 根据波特率确定其数值所占字符长度，用于后续AT命令构造
+//         if (baudrate_in < 19200)
+//         {
+//             baudrate_len = 4;
+//         }
+//         else if (baudrate_in < 115200)
+//         {
+//             baudrate_len = 5;
+//         }
+//         else
+//         {
+//             baudrate_len = 6;
+//         }
+//     }
 
-    // 检查信道编号是否合法（1~50）
-    if (!(channel_in > 0 && channel_in < 51))
-    {
-        res |= CHANNEL_ERROR;
-    }
-    else
-    {
-        // 计算信道数字的位数（一位或两位）
-        channel_len = (channel_in < 10) ? 1 : 2;
-    }
+//     // 检查信道编号是否合法（1~50）
+//     if (!(channel_in > 0 && channel_in < 51))
+//     {
+//         res |= CHANNEL_ERROR;
+//     }
+//     else
+//     {
+//         // 计算信道数字的位数（一位或两位）
+//         channel_len = (channel_in < 10) ? 1 : 2;
+//     }
 
-    // 检查速率参数是否合法（1~8）
-    if (!(speed_in > 0 && speed_in < 9))
-    {
-        res |= SPEED_ERROR;
-    }
+//     // 检查速率参数是否合法（1~8）
+//     if (!(speed_in > 0 && speed_in < 9))
+//     {
+//         res |= SPEED_ERROR;
+//     }
 
-    // 若存在任一错误则不再继续执行AT命令
-    if (res != NO_ERROR)
-    {
-        return res;
-    }
+//     // 若存在任一错误则不再继续执行AT命令
+//     if (res != NO_ERROR)
+//     {
+//         return res;
+//     }
 
-    static const char at_b_cmd[] = "AT+B";
-    static const char at_c_cmd[] = "AT+C";
-    static const char at_s_cmd[] = "AT+S";
+//     static const char at_b_cmd[] = "AT+B";
+//     static const char at_c_cmd[] = "AT+C";
+//     static const char at_s_cmd[] = "AT+S";
 
-    EnterATMode();
-    //  设置波特率
-    SendATCommand(at_b_cmd, strlen(at_b_cmd), baudrate_in, baudrate_len);
-    // 设置信道
-    SendATCommand(at_c_cmd, strlen(at_c_cmd), channel_in, channel_len);
-    // 设置速度
-    SendATCommand(at_s_cmd, strlen(at_s_cmd), speed_in, speed_len);
-    ExitATMode();
-    return res;
-}
+//     EnterATMode();
+//     //  设置波特率
+//     SendATCommand(at_b_cmd, strlen(at_b_cmd), baudrate_in, baudrate_len);
+//     // 设置信道
+//     SendATCommand(at_c_cmd, strlen(at_c_cmd), channel_in, channel_len);
+//     // 设置速度
+//     SendATCommand(at_s_cmd, strlen(at_s_cmd), speed_in, speed_len);
+//     ExitATMode();
+//     return res;
+// }
 
 /**
  * @brief       检测LoRa模块在位函数
  * @param       无
  */
-void lora_check_module_present(void)
+static void lora_check_module_present(void)
 {
     // 进入AT模式
     EnterATMode();
@@ -222,7 +231,7 @@ void lora_check_module_present(void)
  * @param 无
  * @return 无
  */
-void LoraRemoteCommunicationTest(void)
+static void LoraRemoteCommunicationTest(void)
 {
     // 变量初始化
     uint8_t cmd[] = "lora module remote communication test!\r\n";
@@ -246,7 +255,7 @@ void LoraRemoteCommunicationTest(void)
  *                  1: 执行LoRa模块在位检测
  * @return 无返回值
  */
-void LoraUnitTest(lora_unit_test_flag test_flag)
+static void LoraUnitTest(lora_unit_test_flag test_flag)
 {
     // 根据测试标志位执行相应的测试功能
     if (test_flag == LORA_REMOTE_COMMUNICATION_TEST)
@@ -259,4 +268,58 @@ void LoraUnitTest(lora_unit_test_flag test_flag)
         // 检测LoRa模块是否存在
         lora_check_module_present();
     }
+}
+
+/**
+ * @brief 通过lora模块发送数据到其他lora模块
+ * @param waitToSendData 待发送数据队列指针
+ * @return 无返回值
+ */
+static void LoraSendData(queueType *waitToSendData)
+{
+
+}
+
+
+void CommunicationTask(void)
+{
+    // 存放sht30发送的温度湿度数据
+    float receiveTemp = 0.0f;
+    float receiveHumid = 0.0f;
+
+	#if TEST_STACK_WATERMARK
+		uint8_t residualStackSize = uxTaskGetStackHighWaterMark(CommunicationTask_Handler);
+		printf("CommunicationTask 剩余栈空间: %d\r\n", residualStackSize);
+	#endif
+
+	while (1)
+	{
+#if LORA_UNIT_TEST
+		LoraUnitTest(LORA_REMOTE_COMMUNICATION_TEST);
+#endif
+        memset(&receiveData, 0, sizeof(queueType));
+		if(RETURN_SUCCESS == QueueReceiveUser(&receiveData))
+        {
+            if(receiveData.messageTo == COMMUNICATION_TASK)
+            {
+                switch(receiveData.messageType)
+                {
+                    case TEMP_HUMIDITY_COLLECT_FINISH:
+                        {
+                            TempHumidStruct tempHumidRecv = {0};
+                            if (true == QueuePayloadCopyOut(&receiveData, &tempHumidRecv, sizeof(tempHumidRecv)))
+                            {
+                                receiveTemp = tempHumidRecv.temperature;
+                                receiveHumid = tempHumidRecv.humidity;
+                            }
+                            
+                            printf("Temp: %.2f , Humidity: %.2f %%RH\r\n", receiveTemp, receiveHumid);
+                            LoraSendData(&receiveData);
+                        }
+                        break;
+                }
+            }
+        }
+		vTaskDelay(10);
+	}
 }

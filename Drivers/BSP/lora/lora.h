@@ -54,5 +54,6 @@ e_lora_error lora_set_param(uint32_t baudrate_in, uint8_t channel_in, uint8_t sp
 void lora_check_module_present(void);             /* 检测LoRa模块在位函数 */
 void LoraRemoteCommunicationTest(void);           /* LoRa模块远程通信测试函数 */
 void LoraUnitTest(lora_unit_test_flag test_flag); /* LoRa模块单元测试函数 */
+void CommunicationTask(void);
 
 #endif
