@@ -313,7 +313,7 @@ void CommunicationTask(void)
                                 receiveHumid = tempHumidRecv.humidity;
                             }
                             
-                            printf("Temp: %.2f , Humidity: %.2f %%RH\r\n", receiveTemp, receiveHumid);
+                            // printf("Temp: %.2f , Humidity: %.2f %%RH\r\n", receiveTemp, receiveHumid);
                             LoraSendData(&receiveData);
                         }
                         break;

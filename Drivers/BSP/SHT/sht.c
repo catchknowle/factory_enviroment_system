@@ -111,7 +111,7 @@ static bool ReadTempHumid(gpioPinInfo_s clkPin, gpioPinInfo_s sdaPin, uint8_t *p
         return readSuccess;
     }
 
-    IicStart(g_clkInfo, g_sdaInfo);
+    IicStart(clkPin, sdaPin);
 
     // 发送读设备指令
     SendByte(clkPin, sdaPin, SHT_ADDR_READ);
@@ -123,8 +123,6 @@ static bool ReadTempHumid(gpioPinInfo_s clkPin, gpioPinInfo_s sdaPin, uint8_t *p
     }
     
     // stretch 使能，等待测量完成
-    // 注意：必须要将scl置为低电平，这样sda总线上的值才能变化
-    SetSclPin(clkPin, GPIO_PIN_RESET);
     ShtDelayMs(4);
 
     for(int i = 0; i < RECEIVE_INDEX_NUM; i++)
@@ -160,7 +158,7 @@ static bool SendTransmitCommand(gpioPinInfo_s clkPin, gpioPinInfo_s sdaPin)
 {
     bool isAck = false;
     // 发送起始信号
-    IicStart(g_clkInfo, g_sdaInfo);
+    IicStart(clkPin, sdaPin);
     // 发送向器件写指令
     SendByte(clkPin, sdaPin, SHT_ADDR_WRITE);
     // 检查应答信号
@@ -297,7 +295,7 @@ void DataCollectTask(void)
             temp = CalculateTemperature(tempRaw);
             humid = CalculateHumidity(humidRaw);
             // 通过串口打印温湿度数据
-			printf("index: %d, Temp: %.2f, Humidity: %.2f %%RH\r\n", waitSendCnt + 1, temp, humid);
+			// printf("index: %d, Temp: %.2f, Humidity: %.2f %%RH\r\n", waitSendCnt + 1, temp, humid);
             // 累加单次温度和湿度值
 			tempSum += temp;
 			humidSum += humid;
