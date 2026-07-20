@@ -28,6 +28,11 @@
 #include "./BSP/SHT/sht.h"
 #include "QueueManage.h"
 
+/**
+ * @brief       FreeRTOS启动任务
+ * @param       无
+ * @retval      无
+ */
 void StartTask(void)
 {
 	// 进入临界区
@@ -44,21 +49,36 @@ void StartTask(void)
 	portEXIT_CRITICAL();
 }
 
-void freertos_entry(void)
+/**
+ * @brief       FreeRTOS入口函数
+ * @param       无
+ * @retval      无
+ */
+void FreertosEntry(void)
 {
 	xTaskCreate((TaskFunction_t)StartTask, "StartTask", START_TASK_STACK_SIZE,
 				NULL, START_TASK_PRIO, &StartTask_Handler);
 	vTaskStartScheduler();
 }
 
+/**
+ * @brief       主函数
+ * @param       无
+ * @retval      int : 程序运行状态
+ */
 int main(void)
 {
-	HAL_Init();							/* 初始化HAL库 */
-	sys_stm32_clock_init(RCC_PLL_MUL9); /* 设置时钟,72M */
-	delay_init(72);						/* 初始化延时函数 */
-	led_init();							/* 初始化LED */
-	usart_init(115200);					/* 初始化串口1和串口3 */
-	ShtInit();							/* 初始化SHT传感器 */
-	lora_init();						/* 初始化LoRa */
-	freertos_entry();				
+	HAL_Init();							// 初始化HAL库
+	sys_stm32_clock_init(RCC_PLL_MUL9); // 设置时钟,72M
+	delay_init(72);						// 初始化延时函数
+	led_init();							// 初始化LED
+	usart_init(115200);					// 初始化串口1和串口3
+
+	// 初始化SHT30传感器
+	if (Sht30Init(Sht30GetDefaultDevice()) == false)
+	{
+		// 预留初始化失败后的日志处理
+	}
+	LoraInit();							// 初始化LoRa
+	FreertosEntry();
 }

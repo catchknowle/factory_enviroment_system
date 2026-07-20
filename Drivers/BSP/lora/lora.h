@@ -5,27 +5,40 @@
 #include <string.h>
 #include <stdbool.h>
 
+// LoRa AT模式枚举类型
 typedef enum
 {
+    // AT查询模式
     AT_QUERY,
+    // AT设置模式
     AT_SET,
-} AT_mode;
+} AtModeEnumType;
 
+// LoRa基础配置结构体类型
 typedef struct
 {
+    // 波特率
     uint8_t baudrate;
+    // 通道
     uint8_t channel;
+    // 速率
     uint8_t speed;
+    // 功率
     uint8_t power;
-} s_lora_config;
+} LoraConfigStructType;
 
+// LoRa错误码枚举类型
 typedef enum
 {
-    NO_ERROR = 0,      // 无错误
-    BAUD_ERROR = 1,    // 波特率错误
-    CHANNEL_ERROR = 2, // 通道错误
-    SPEED_ERROR = 4,   // 传输速度错误
-} e_lora_error;
+    // 无错误
+    NO_ERROR = 0,
+    // 波特率错误
+    BAUD_ERROR = 1,
+    // 通道错误
+    CHANNEL_ERROR = 2,
+    // 传输速度错误
+    SPEED_ERROR = 4,
+} LoraErrorEnumType;
 
 #define LORA_KEY_PIN GPIO_PIN_0
 #define LORA_KEY_PORT GPIOA
@@ -35,25 +48,29 @@ typedef enum
 #define LORA_STATE_PORT GPIOE
 #define LORA_STATE_CLOCK_ENABLE() __HAL_RCC_GPIOE_CLK_ENABLE()
 
-void lora_init(void);
+void LoraInit(void);
 
+// LoRa参数设置结构体类型
 typedef struct
 {
-    uint32_t baudrate; // 波特率
-    uint8_t channel;   // 通道
-    uint8_t speed;     // 传输速度
-} loraSettingParamStruct;
+    // 波特率
+    uint32_t baudrate;
+    // 通道
+    uint8_t channel;
+    // 传输速度
+    uint8_t speed;
+} LoraSettingParamStructType;
 
+// LoRa单元测试标志枚举类型
 typedef enum
 {
-    LORA_REMOTE_COMMUNICATION_TEST = 0, // LoRa模块远程通信测试
-    LORA_PRESENT_UNIT_TEST = 1,         // 检测LoRa模块在位测试
-} lora_unit_test_flag;
+    // LoRa模块远程通信测试
+    LORA_REMOTE_COMMUNICATION_TEST = 0,
+    // 检测LoRa模块在位测试
+    LORA_PRESENT_UNIT_TEST = 1,
+} LoraUnitTestFlagEnumType;
 
-e_lora_error lora_set_param(uint32_t baudrate_in, uint8_t channel_in, uint8_t speed_in);
-void lora_check_module_present(void);             /* 检测LoRa模块在位函数 */
-void LoraRemoteCommunicationTest(void);           /* LoRa模块远程通信测试函数 */
-void LoraUnitTest(lora_unit_test_flag test_flag); /* LoRa模块单元测试函数 */
+LoraErrorEnumType LoraSetParam(uint32_t baudrate_in, uint8_t channel_in, uint8_t speed_in);
 void CommunicationTask(void);
 
 #endif

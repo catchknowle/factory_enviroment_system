@@ -2,52 +2,98 @@
 #define __SHT__H
 
 #include "./SYSTEM/sys/sys.h"
+#include "iic.h"
 #include <stdbool.h>
 
-#define SHT_CLK_PORT GPIOB
-#define SHT_CLK_PIN GPIO_PIN_6
-#define SHT_CLK_RCC_ENABLE() do{__HAL_RCC_GPIOB_CLK_ENABLE();}while(0)
+#define SHT30_CLK_PORT GPIOB
+#define SHT30_CLK_PIN GPIO_PIN_6
+#define SHT30_CLK_RCC_ENABLE() do{__HAL_RCC_GPIOB_CLK_ENABLE();}while(0)
 
-#define SHT_SDA_PORT GPIOB
-#define SHT_SDA_PIN GPIO_PIN_7
-#define SHT_SDA_RCC_ENABLE() do{__HAL_RCC_GPIOB_CLK_ENABLE();}while(0)
+#define SHT30_SDA_PORT GPIOB
+#define SHT30_SDA_PIN GPIO_PIN_7
+#define SHT30_SDA_RCC_ENABLE() do{__HAL_RCC_GPIOB_CLK_ENABLE();}while(0)
 
-#define SHT_ADDR_WRITE (0x88)                  //sht30写器件地址 (0x44 << 1)
-#define SHT_ADDR_READ (0x89)                   //sht30读器件地址 (0x45 << 1)
-#define SINGLE_SHOT_COMMAND_MSB (0x2c)         //单次测量命令字(高字节) 时钟拉伸
-#define SINGLE_SHOT_COMMAND_LSB (0x0d)         //单次测量命令字(低字节) 中重复度
+#define SHT30_ADDR_WRITE (0x88U)
+#define SHT30_ADDR_READ (0x89U)
 
-// 接收数据结构体
+// SHT30接收数据索引枚举类型
 typedef enum
 {
-    TEMP_HIGH_BYTE_INDEX = 0,                           // 温度高字节索引位置
-    TEMP_LOW_BYTE_INDEX  = 1,                           // 温度低字节索引位置
-    TEMP_CHECKSUM_INDEX  = 2,                           // 温度校验和索引位置
+    // 温度高字节索引
+    TEMP_HIGH_BYTE_INDEX = 0,
+    // 温度低字节索引
+    TEMP_LOW_BYTE_INDEX = 1,
+    // 温度CRC校验字节索引
+    TEMP_CHECKSUM_INDEX = 2,
+    // 湿度高字节索引
+    HUMID_HIGH_BYTE_INDEX = 3,
+    // 湿度低字节索引
+    HUMID_LOW_BYTE_INDEX = 4,
+    // 湿度CRC校验字节索引
+    HUMID_CHECKSUM_INDEX = 5,
+    // 接收数据总长度
+    RECEIVE_INDEX_NUM = 6
+} ShtReceiveDataIndexEnumType;
 
-    HUMID_HIGH_BYTE_INDEX  = 3,                           // 湿度高字节索引位置
-    HUMID_LOW_BYTE_INDEX   = 4,                           // 湿度低字节索引位置
-    HUMID_CHECKSUM_INDEX   = 5,                           // 湿度校验和索引位置
-    RECEIVE_INDEX_NUM      = 6,                           // 接收数据索引数量
-}shtReceiveDataIndexEnum;
+// SHT30时钟使能函数类型
+typedef void (*Sht30ClockEnableFuncType)(void);
 
-//  温湿度数据结构体定义
-typedef struct 
+// 软件IIC总线配置结构体类型
+typedef struct
 {
-    float temperature;                               // 温度
-    float humidity;                                  // 湿度
-}TempHumidStruct;
+    // SCL引脚信息
+    gpioPinInfo_s sclPin;
+    // SDA引脚信息
+    gpioPinInfo_s sdaPin;
+    // SCL时钟使能函数
+    Sht30ClockEnableFuncType pSclClockEnable;
+    // SDA时钟使能函数
+    Sht30ClockEnableFuncType pSdaClockEnable;
+} SoftIicBusStructType;
 
+// SHT30底层操作接口结构体类型
+typedef struct
+{
+    // 初始化函数指针
+    bool (*Init)(void *pBusCtx);
+    // 写函数指针
+    bool (*Write)(void *pBusCtx, uint8_t deviceAddr, const uint8_t *pWriteData, uint16_t writeLen);
+    // 读函数指针
+    bool (*Read)(void *pBusCtx, uint8_t deviceAddr, uint8_t *pReadData, uint16_t readLen);
+    // 延时函数指针
+    void (*DelayMs)(uint32_t delayMs);
+} Sht30OpsStructType;
 
+// SHT30设备对象结构体类型
+typedef struct
+{
+    // 底层操作对象指针
+    const Sht30OpsStructType *pOps;
+    // 总线上下文指针
+    void *pBusCtx;
+    // 设备写地址
+    uint8_t writeAddr;
+    // 设备读地址
+    uint8_t readAddr;
+} Sht30DeviceStructType;
 
-// 初始化SHT传感器
-void ShtInit(void);
-// 获取温度湿度数据（校验通过后通过指针返回温湿度原始值）
-bool GetTempHumidProcess(uint16_t *pTempRaw, uint16_t *pHumidRaw);
-// 根据原始数据计算温度值（单位：°C）
-float CalculateTemperature(uint16_t tempRaw);
-// 根据原始数据计算湿度值（单位：%RH）
-float CalculateHumidity(uint16_t humidRaw);
-// 数据收集任务
+// 温湿度数据结构体类型
+typedef struct
+{
+    // 温度值
+    float temperature;
+    // 湿度值
+    float humidity;
+} TempHumidStructType;
+
+// SHT30软件IIC操作对象
+extern const Sht30OpsStructType g_sht30SoftIicOps;
+
+Sht30DeviceStructType *Sht30GetDefaultDevice(void);
+bool Sht30Init(Sht30DeviceStructType *pDevice);
+bool Sht30GetTempHumidRaw(Sht30DeviceStructType *pDevice, uint16_t *pTempRaw, uint16_t *pHumidRaw);
+float Sht30CalculateTemperature(uint16_t tempRaw);
+float Sht30CalculateHumidity(uint16_t humidRaw);
 void DataCollectTask(void);
 
 #endif

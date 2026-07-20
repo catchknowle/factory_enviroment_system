@@ -10,22 +10,26 @@
 
 #define LORA_UNIT_TEST 1
 
-char cmd[20] = "AT+B9600";
+// LoRa默认AT命令缓存
+char g_cmd[20] = "AT+B9600";
 
 extern UART_HandleTypeDef g_uart1_handle; /* UART句柄 */
 extern UART_HandleTypeDef g_uart3_handle;
 
-static queueType receiveData = {0};
+// LoRa通信任务接收队列对象
+static queueType g_receiveData = {0};
 
 /**
- * @brief 初始化LoRa模块
- * @param baudrate 串口通信波特率
- * @note 该函数完成LoRa模块的GPIO引脚配置和串口初始化
+ * @brief       初始化LoRa模块
+ * @param       无
+ * @retval      无
  */
-void lora_init(void)
+void LoraInit(void)
 {
     // 配置LoRa控制引脚和状态引脚为推挽输出模式
     LORA_KEY_CLOCK_ENABLE();
+
+    // GPIO初始化结构体
     GPIO_InitTypeDef gpio_handle = {0};
     gpio_handle.Pin = LORA_KEY_PIN;
     gpio_handle.Mode = GPIO_MODE_OUTPUT_PP;
@@ -116,9 +120,9 @@ static void ExitATMode(void)
  *
  * @return 返回错误码，NO_ERROR表示无错误，其他值表示对应错误类型（如BAUD_ERROR等）
  */
-// static e_lora_error lora_set_param(uint32_t baudrate_in, uint8_t channel_in, uint8_t speed_in)
+// static LoraErrorEnumType LoraSetParam(uint32_t baudrate_in, uint8_t channel_in, uint8_t speed_in)
 // {
-//     e_lora_error res = NO_ERROR;
+//     LoraErrorEnumType res = NO_ERROR;
 //     uint8_t baudrate_len = 0;
 //     uint8_t channel_len = 0;
 //     uint8_t speed_len = 1;
@@ -197,22 +201,27 @@ static void ExitATMode(void)
 // }
 
 /**
- * @brief       检测LoRa模块在位函数
+ * @brief       检测LoRa模块是否在位
  * @param       无
+ * @retval      无
  */
-static void lora_check_module_present(void)
+static void LoraCheckModulePresent(void)
 {
     // 进入AT模式
     EnterATMode();
 
     // 发送AT指令
+    // AT测试命令缓存
     char at_cmd[] = "AT";
     HAL_UART_Transmit(&g_uart3_handle, (uint8_t *)at_cmd, strlen(at_cmd), 1000);
     while (__HAL_UART_GET_FLAG(&g_uart3_handle, USART_FLAG_TC) == RESET);
 
     // ExitATMode();
 
+    // 模块在位标志
     bool flag = GetLoraPresentFlag();
+
+    // 判断模块是否在位
     if (flag == true)
     {
         printf("LoRa connected\r\n");
@@ -226,10 +235,9 @@ static void lora_check_module_present(void)
 }
 
 /**
- * @brief LoRa模块远程通信测试函数
- * @details 该函数用于测试LoRa模块的远程通信功能，通过串口发送测试消息并启动接收中断
- * @param 无
- * @return 无
+ * @brief       LoRa模块远程通信测试函数
+ * @param       无
+ * @retval      无
  */
 static void LoraRemoteCommunicationTest(void)
 {
@@ -249,72 +257,91 @@ static void LoraRemoteCommunicationTest(void)
 }
 
 /**
- * @brief LoRa模块单元测试函数
- * @param test_flag 测试标志位，用于选择不同的测试模式
- *                  0: 执行LoRa远程通信测试
- *                  1: 执行LoRa模块在位检测
- * @return 无返回值
+ * @brief       LoRa模块单元测试函数
+ * @param       testFlag : 测试标志位
+ * @retval      无
  */
-static void LoraUnitTest(lora_unit_test_flag test_flag)
+static void LoraUnitTest(LoraUnitTestFlagEnumType testFlag)
 {
     // 根据测试标志位执行相应的测试功能
-    if (test_flag == LORA_REMOTE_COMMUNICATION_TEST)
+    if (testFlag == LORA_REMOTE_COMMUNICATION_TEST)
     {
         // 执行LoRa远程通信测试
         LoraRemoteCommunicationTest();
     }
-    else if (test_flag == LORA_PRESENT_UNIT_TEST)
+    else if (testFlag == LORA_PRESENT_UNIT_TEST)
     {
         // 检测LoRa模块是否存在
-        lora_check_module_present();
+        LoraCheckModulePresent();
     }
 }
 
 /**
- * @brief 通过lora模块发送数据到其他lora模块
- * @param waitToSendData 待发送数据队列指针
- * @return 无返回值
+ * @brief       通过LoRa模块发送数据
+ * @param       pWaitToSendData : 待发送数据队列指针
+ * @retval      无
  */
-static void LoraSendData(queueType *waitToSendData)
+static void LoraSendData(queueType *pWaitToSendData)
 {
-
+    // 校验待发送队列指针
+    if (pWaitToSendData == NULL)
+    {
+        return;
+    }
 }
 
-
+/**
+ * @brief       LoRa通信任务
+ * @param       无
+ * @retval      无
+ */
 void CommunicationTask(void)
 {
-    // 存放sht30发送的温度湿度数据
+    // 接收温度值
     float receiveTemp = 0.0f;
+
+    // 接收湿度值
     float receiveHumid = 0.0f;
 
 	#if TEST_STACK_WATERMARK
+		// 任务剩余栈空间
 		uint8_t residualStackSize = uxTaskGetStackHighWaterMark(CommunicationTask_Handler);
 		printf("CommunicationTask 剩余栈空间: %d\r\n", residualStackSize);
 	#endif
 
+	// 循环执行LoRa通信任务
 	while (1)
 	{
 #if LORA_UNIT_TEST
 		LoraUnitTest(LORA_REMOTE_COMMUNICATION_TEST);
 #endif
-        memset(&receiveData, 0, sizeof(queueType));
-		if(RETURN_SUCCESS == QueueReceiveUser(&receiveData))
+
+        // 清空接收队列对象
+        memset(&g_receiveData, 0, sizeof(queueType));
+
+		// 判断是否成功接收到队列数据
+		if (RETURN_SUCCESS == QueueReceiveUser(&g_receiveData))
         {
-            if(receiveData.messageTo == COMMUNICATION_TASK)
+            // 判断消息目标是否为通信任务
+            if (g_receiveData.messageTo == COMMUNICATION_TASK)
             {
-                switch(receiveData.messageType)
+                // 根据消息类型执行对应处理流程
+                switch(g_receiveData.messageType)
                 {
                     case TEMP_HUMIDITY_COLLECT_FINISH:
                         {
-                            TempHumidStruct tempHumidRecv = {0};
-                            if (true == QueuePayloadCopyOut(&receiveData, &tempHumidRecv, sizeof(tempHumidRecv)))
+                            // 接收温湿度数据结构体
+                            TempHumidStructType tempHumidRecv = {0};
+
+                            // 判断是否成功拷贝温湿度数据
+                            if (QueuePayloadCopyOut(&g_receiveData, &tempHumidRecv, sizeof(tempHumidRecv)) == true)
                             {
                                 receiveTemp = tempHumidRecv.temperature;
                                 receiveHumid = tempHumidRecv.humidity;
                             }
                             
                             // printf("Temp: %.2f , Humidity: %.2f %%RH\r\n", receiveTemp, receiveHumid);
-                            LoraSendData(&receiveData);
+                            LoraSendData(&g_receiveData);
                         }
                         break;
                 }
